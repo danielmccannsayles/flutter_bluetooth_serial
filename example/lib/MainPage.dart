@@ -299,10 +299,7 @@ class _MainPage extends State<MainPage> {
                         Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (context) {
-                              return ScopedModel<BackgroundCollectingTask>(
-                                model: _collectingTask!,
-                                child: BackgroundCollectedPage(),
-                              );
+                              return BackgroundCollectedPage();
                             },
                           ),
                         );

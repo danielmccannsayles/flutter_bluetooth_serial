@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
@@ -18,17 +19,10 @@ class DataSample {
   });
 }
 
-class BackgroundCollectingTask extends Model {
-  static BackgroundCollectingTask of(
-    BuildContext context, {
-    bool rebuildOnChange = false,
-  }) =>
-      ScopedModel.of<BackgroundCollectingTask>(
-        context,
-        rebuildOnChange: rebuildOnChange,
-      );
+class BackgroundCollectingTask {
+  BackgroundCollectingTask();
 
-  final BluetoothConnection _connection;
+  late BluetoothConnection _connection;
   List<int> _buffer = List<int>.empty(growable: true);
 
   // @TODO , Such sample collection in real code should be delegated
@@ -37,25 +31,41 @@ class BackgroundCollectingTask extends Model {
   // @TODO ? should be shrinked at some point, endless colleting data would cause memory shortage.
   List<DataSample> samples = List<DataSample>.empty(growable: true);
 
+  List<String> stringSamples = <String>['0'];
+
+  String currentValue = 'start';
+
+  var streamOne;
+
   bool inProgress = false;
 
   BackgroundCollectingTask._fromConnection(this._connection) {
     _connection.input!.listen((data) {
+      log('Data: ' + data.toString());
       _buffer += data;
+
+      stringSamples.add(data.toString());
+
+      currentValue = data.toString();
 
       while (true) {
         // If there is a sample, and it is full sent
-        int index = _buffer.indexOf('t'.codeUnitAt(0));
+        int index = _buffer
+            .indexOf('t'.codeUnitAt(0)); //looking for 16-bit UTF-16 of 't'
         if (index >= 0 && _buffer.length - index >= 7) {
+          //example - 't 123456'
+          log(_buffer[index].toString());
+          log('teting');
           final DataSample sample = DataSample(
               temperature1: (_buffer[index + 1] + _buffer[index + 2] / 100),
               temperature2: (_buffer[index + 3] + _buffer[index + 4] / 100),
               waterpHlevel: (_buffer[index + 5] + _buffer[index + 6] / 100),
               timestamp: DateTime.now());
           _buffer.removeRange(0, index + 7);
+          //removes this range
 
           samples.add(sample);
-          notifyListeners(); // Note: It shouldn't be invoked very often - in this example data comes at every second, but if there would be more data, it should update (including repaint of graphs) in some fixed interval instead of after every sample.
+          // Note: It shouldn't be invoked very often - in this example data comes at every second, but if there would be more data, it should update (including repaint of graphs) in some fixed interval instead of after every sample.
           //print("${sample.timestamp.toString()} -> ${sample.temperature1} / ${sample.temperature2}");
         }
         // Otherwise break
@@ -63,9 +73,6 @@ class BackgroundCollectingTask extends Model {
           break;
         }
       }
-    }).onDone(() {
-      inProgress = false;
-      notifyListeners();
     });
   }
 
@@ -84,28 +91,28 @@ class BackgroundCollectingTask extends Model {
     inProgress = true;
     _buffer.clear();
     samples.clear();
-    notifyListeners();
+
     _connection.output.add(ascii.encode('start'));
     await _connection.output.allSent;
   }
 
   Future<void> cancel() async {
     inProgress = false;
-    notifyListeners();
+
     _connection.output.add(ascii.encode('stop'));
     await _connection.finish();
   }
 
   Future<void> pause() async {
     inProgress = false;
-    notifyListeners();
+
     _connection.output.add(ascii.encode('stop'));
     await _connection.output.allSent;
   }
 
-  Future<void> reasume() async {
+  Future<void> resume() async {
     inProgress = true;
-    notifyListeners();
+
     _connection.output.add(ascii.encode('start'));
     await _connection.output.allSent;
   }
